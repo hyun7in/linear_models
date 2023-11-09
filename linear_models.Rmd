@@ -1,0 +1,147 @@
+---
+title: "Untitled"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(p8105.datasets)
+```
+
+## Load and clean the Airbnb data
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  select(
+    price, stars, borough = neighbourhood_group, 
+    neighbourhood, room_type) |> 
+  filter(borough != "Staten Island")
+```
+
+Let's fit a model!!
+```{r}
+fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars + borough, data = _)
+```
+
+Let's look at the fit
+```{r}
+fit
+summary(fit)
+summary(fit)$coef
+#fitted.values(fit)
+```
+
+tidy up the output instead
+```{r}
+fit |>
+  broom::glance()
+```
+
+
+tidy up the coefficients
+```{r}
+fit |>
+  broom::tidy() |>
+  mutate(term = str_replace(term, "^borough", "Borough: ")) |>
+  select(term, estimate, p.value) |>
+  knitr::kable(digits = 3)
+
+```
+
+```{r}
+fit = 
+  nyc_airbnb |>
+  mutate(
+    borough = fct_infreq(borough),
+    room_type = fct_infreq(room_type)
+  ) |>
+  lm(price ~ stars + borough + room_type, data = _)
+
+fit |>
+  broom::tidy()
+```
+
+
+```{r}
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = borough, y = resid)) + 
+  geom_violin() 
+
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = stars, y = resid)) + 
+  geom_point() 
+```
+
+```{r}
+fit_null = lm(price ~ stars + borough, data = nyc_airbnb)
+fit_alternative = lm(price ~ stars + borough + room_type, data = nyc_airbnb)
+
+anova(fit_null, fit_alternative) |> 
+  broom::tidy()
+```
+
+## Borough-level differences
+
+```{r}
+fit = 
+  nyc_airbnb |>
+  lm(price ~ stars * borough + room_type * borough, data = _)
+
+fit |>
+  broom::tidy()
+```
+
+```{r}
+airbnb_lm = function(df){
+  lm(price ~ stars + room_type, data = df)
+}
+  
+nyc_airbnb |>
+  nest(df = -borough) |>
+  mutate(
+    models = map(df, airbnb_lm),
+    results = map(models, broom::tidy)
+  ) |>
+  select(borough, results) |>
+  unnest(results) |>
+  select(borough, term, estimate) |>
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |>
+  knitr::kable(digits = 2)
+```
+
+same thing but just a little different
+```{r}
+airbnb_lm = function(df){
+  lm(price ~ stars + room_type, data = df)
+}
+  
+nyc_airbnb |>
+  nest(df = -borough) |>
+  mutate(
+    models = map(df, \(df) lm(price ~ stars + room_type, data = df)),
+    results = map(models, broom::tidy)
+  ) |>
+  select(borough, results) |>
+  unnest(results) |>
+  select(borough, term, estimate) |>
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |>
+  knitr::kable(digits = 2)
+```
+
+
+
+
