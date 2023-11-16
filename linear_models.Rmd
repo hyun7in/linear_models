@@ -142,6 +142,3 @@ nyc_airbnb |>
   knitr::kable(digits = 2)
 ```
 
-
-
-
